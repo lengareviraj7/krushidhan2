@@ -216,10 +216,25 @@ async function loadInitialLookups() {
 }
 
 async function refreshProductList() {
-    const res = await fetch("/api/masters/products");
-    allProducts = await res.json();
-    populateProductDropdown("pos-item-product", allProducts);
-    populateProductDropdown("pur-item-product", allProducts);
+    try {
+        const res = await fetch("/api/masters/products");
+        if (res.ok) {
+            allProducts = await res.json();
+            populateProductDropdown("pos-item-product", allProducts);
+            populateProductDropdown("pur-item-product", allProducts);
+            populateStockProductDropdown();
+            filterProductCatalog();
+            if (typeof refreshInventoryList === "function") {
+                refreshInventoryList();
+            }
+            const multiModal = document.getElementById("modal-multi-product");
+            if (multiModal && multiModal.style.display === "flex") {
+                renderMultiProductList();
+            }
+        }
+    } catch (err) {
+        console.error("Error refreshing product list:", err);
+    }
 }
 
 async function refreshCustomerList() {
@@ -1284,8 +1299,6 @@ async function createMasterProduct() {
             document.getElementById("m-prod-mrp").value = "0";
             if (document.getElementById("m-prod-alert")) document.getElementById("m-prod-alert").value = "5";
             await refreshProductList();
-            await loadMasterTables();
-            populateStockProductDropdown();
         } else {
             const err = await res.json();
             alert("Failed to save product: " + (err.detail || "Server error"));
