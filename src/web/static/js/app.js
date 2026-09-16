@@ -42,6 +42,58 @@ let activeFarmerId = null;
 
 let pnlAllProducts = [];
 
+// ----------------- Real-Time Multi-Tab & Device Auto-Sync Controller -----------------
+const erpSyncChannel = (typeof BroadcastChannel !== "undefined") ? new BroadcastChannel("agri_erp_channel") : null;
+if (erpSyncChannel) {
+    erpSyncChannel.onmessage = (event) => {
+        if (event.data && event.data.action === "REFRESH_ALL") {
+            refreshAllDataSilently();
+        }
+    };
+}
+
+function notifyOtherTabsDataChanged() {
+    if (erpSyncChannel) {
+        try {
+            erpSyncChannel.postMessage({ action: "REFRESH_ALL", timestamp: Date.now() });
+        } catch (e) {
+            console.error("BroadcastChannel error:", e);
+        }
+    }
+}
+
+let autoSyncInterval = null;
+function startAutoSyncPolling() {
+    if (autoSyncInterval) return;
+    autoSyncInterval = setInterval(() => {
+        if (!document.hidden) {
+            refreshAllDataSilently();
+        }
+    }, 8000);
+}
+
+async function refreshAllDataSilently() {
+    try {
+        await refreshProductList();
+        await refreshCustomerList();
+        await loadInventorySilently();
+    } catch (e) {
+        // Silent catch for background auto-polling
+    }
+}
+
+async function loadInventorySilently() {
+    try {
+        const res = await fetch("/api/inventory/stock-summary");
+        if (res.ok) {
+            rawInventoryItems = await res.json();
+            filterInventoryTable();
+        }
+    } catch (err) {
+        // Silent
+    }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     initTabs();
     initKeyboardShortcuts();
@@ -66,6 +118,7 @@ async function bootstrapDashboard() {
     loadSettings();
     loadFarmerStatusList();
     loadMasterTables();
+    startAutoSyncPolling();
 }
 
 
@@ -729,6 +782,8 @@ async function submitSalesBill() {
             await refreshProductList();
             await refreshCustomerList();
             await fetchNextInvoiceNo();
+            await loadInventorySilently();
+            notifyOtherTabsDataChanged();
         } else {
             alert(`Error: ${result.detail || "Failed to save bill"}`);
         }
@@ -1059,6 +1114,7 @@ async function submitAddDirectStock() {
             await refreshProductList();
             await loadInventory();
             await loadMasterTables();
+            notifyOtherTabsDataChanged();
         } else {
             alert("त्रुटी: " + (data.detail || "स्टॉक जमा करता आला नाही."));
         }
@@ -1293,6 +1349,7 @@ async function createMasterProduct() {
             })
         });
         if (res.ok) {
+            const resData = await res.json();
             alert(`✅ Product "${finalName}" saved to catalog successfully!`);
             document.getElementById("m-prod-name").value = "";
             document.getElementById("m-prod-hsn").value = "";
@@ -1302,6 +1359,11 @@ async function createMasterProduct() {
             document.getElementById("m-prod-mrp").value = "0";
             if (document.getElementById("m-prod-alert")) document.getElementById("m-prod-alert").value = "5";
             await refreshProductList();
+            if (resData && resData.product_id) {
+                const stockProdSelect = document.getElementById("stock-prod-select");
+                if (stockProdSelect) stockProdSelect.value = resData.product_id;
+            }
+            notifyOtherTabsDataChanged();
         } else {
             const err = await res.json();
             alert("Failed to save product: " + (err.detail || "Server error"));
