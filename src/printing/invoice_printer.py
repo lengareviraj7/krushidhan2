@@ -202,10 +202,10 @@ class InvoicePrinter:
         pay_mode_label = sale.payment_mode.upper() if sale.payment_mode else "CASH"
         lic_box_html = f"""
         <b>TAX INVOICE : {pay_mode_label}</b><br/>
-        Fertilizer L. No : {self.settings.dl_fertilizer or '-'}<br/>
-        Insectiside L. No: {self.settings.dl_pesticide or '-'}<br/>
-        Seeds L. No &nbsp;&nbsp;&nbsp;&nbsp;: {self.settings.dl_seed or '-'}<br/>
-        GSTIN : {self.settings.gstin or '-'}
+        Fertilizer L. No : {self.settings.dl_fertilizer or 'LCFRD0920250506SNG'}<br/>
+        Insectiside L. No: {self.settings.dl_pesticide or 'LCID0920250497SNG'}<br/>
+        Seeds L. No &nbsp;&nbsp;&nbsp;&nbsp;: {self.settings.dl_seed or 'LCSD0920250506SNG'}<br/>
+        GSTIN : {self.settings.gstin or '27BSXPL3414R1Z5'}
         """
         lic_p = Paragraph(lic_box_html, small_text)
 
