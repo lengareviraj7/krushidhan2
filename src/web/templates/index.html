@@ -999,8 +999,9 @@
 
                     <div class="form-row" style="margin-bottom: 12px;">
                         <div class="form-group" style="flex: 2.2;">
-                            <label>GST Slab</label>
-                            <select id="m-prod-tax"></select>
+                            <label>Pack Size / Content (प्रमाण/पॅकिंग वजन)</label>
+                            <select id="m-prod-pack-size" onchange="handlePackSizeChange(this)" style="font-weight: 600;"></select>
+                            <input type="text" id="m-prod-pack-custom" placeholder="e.g. 500 ML, 1 LTR, 50 KG" style="display: none; margin-top: 4px; font-weight: 600;">
                         </div>
                         <div class="form-group" style="flex: 1.2;">
                             <label>Min Alert</label>

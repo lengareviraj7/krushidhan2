@@ -203,14 +203,7 @@ async function loadInitialLookups() {
             const unitOptions = allLookups.units.map(u => `<option value="${u.unit_id}">${u.unit_name} (${u.symbol})</option>`)
                 .concat(['<option value="__ADD_NEW__" style="font-weight: 700; color: #15803d;">➕ Add New Unit...</option>']);
             unitSelect.innerHTML = unitOptions.join("");
-        }
-
-        // Populate Tax Groups in product master
-        const taxSelect = document.getElementById("m-prod-tax");
-        if (taxSelect && allLookups.tax_groups) {
-            taxSelect.innerHTML = allLookups.tax_groups.map(t => 
-                `<option value="${t.tax_group_id}">${t.tax_group_name || 'GST'}</option>`
-            ).join("");
+            updatePackSizeOptions();
         }
 
         // Load Products & Customers for dropdowns
@@ -1231,20 +1224,37 @@ function filterProductCatalog() {
 }
 
 async function createMasterProduct() {
-    const name = document.getElementById("m-prod-name").value.trim();
+    const rawName = document.getElementById("m-prod-name").value.trim();
     const catId = parseInt(document.getElementById("m-prod-cat").value) || null;
     const mfgId = parseInt(document.getElementById("m-prod-mfg").value) || null;
     const hsn = document.getElementById("m-prod-hsn").value.trim();
     const unitId = parseInt(document.getElementById("m-prod-unit").value) || 1;
-    const taxId = parseInt(document.getElementById("m-prod-tax").value) || 2;
+    const taxSelect = document.getElementById("m-prod-tax");
+    const taxId = taxSelect ? (parseInt(taxSelect.value) || 1) : 1;
     const purRate = parseFloat(document.getElementById("m-prod-pur-rate").value) || 0;
     const saleRate = parseFloat(document.getElementById("m-prod-sale-rate").value) || 0;
     const mrp = parseFloat(document.getElementById("m-prod-mrp").value) || 0;
     const alertQty = parseFloat(document.getElementById("m-prod-alert")?.value) || 5;
 
-    if (!name) {
+    let packSize = "";
+    const packSelect = document.getElementById("m-prod-pack-size");
+    const packCustom = document.getElementById("m-prod-pack-custom");
+    if (packSelect) {
+        if (packSelect.value === "__CUSTOM__" && packCustom) {
+            packSize = packCustom.value.trim();
+        } else {
+            packSize = packSelect.value.trim();
+        }
+    }
+
+    if (!rawName) {
         alert("Product Name is required!");
         return;
+    }
+
+    let finalName = rawName;
+    if (packSize && !finalName.toLowerCase().includes(packSize.toLowerCase())) {
+        finalName = `${finalName} (${packSize})`;
     }
 
     try {
@@ -1252,7 +1262,7 @@ async function createMasterProduct() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                product_name: name,
+                product_name: finalName,
                 category_id: catId,
                 manufacturer_id: mfgId,
                 hsn_code: hsn,
@@ -1265,9 +1275,10 @@ async function createMasterProduct() {
             })
         });
         if (res.ok) {
-            alert(`✅ Product "${name}" saved to catalog successfully!`);
+            alert(`✅ Product "${finalName}" saved to catalog successfully!`);
             document.getElementById("m-prod-name").value = "";
             document.getElementById("m-prod-hsn").value = "";
+            if (packCustom) packCustom.value = "";
             document.getElementById("m-prod-pur-rate").value = "0";
             document.getElementById("m-prod-sale-rate").value = "0";
             document.getElementById("m-prod-mrp").value = "0";
@@ -2734,6 +2745,75 @@ function handleUnitSelectChange(selectEl) {
     if (selectEl.value === "__ADD_NEW__") {
         selectEl.value = "";
         openAddUnitModal();
+    } else {
+        updatePackSizeOptions();
+    }
+}
+
+function updatePackSizeOptions() {
+    const unitSelect = document.getElementById("m-prod-unit");
+    const packSelect = document.getElementById("m-prod-pack-size");
+    const packCustom = document.getElementById("m-prod-pack-custom");
+    if (!unitSelect || !packSelect) return;
+
+    const selectedText = unitSelect.options[unitSelect.selectedIndex] ? unitSelect.options[unitSelect.selectedIndex].text.toLowerCase() : "";
+
+    let options = [];
+    if (selectedText.includes("ltr") || selectedText.includes("ml") || selectedText.includes("litre") || selectedText.includes("bottle") || selectedText.includes("btl")) {
+        options = [
+            '<option value="1 LTR">1 Litre (1 LTR)</option>',
+            '<option value="500 ML">500 Millilitre (500 ML)</option>',
+            '<option value="250 ML">250 Millilitre (250 ML)</option>',
+            '<option value="100 ML">100 Millilitre (100 ML)</option>',
+            '<option value="50 ML">50 Millilitre (50 ML)</option>',
+            '<option value="2 LTR">2 Litre (2 LTR)</option>',
+            '<option value="5 LTR">5 Litre (5 LTR)</option>',
+            '<option value="10 LTR">10 Litre (10 LTR)</option>',
+            '<option value="20 LTR">20 Litre (20 LTR)</option>'
+        ];
+    } else if (selectedText.includes("kg") || selectedText.includes("gm") || selectedText.includes("kilogram") || selectedText.includes("gram") || selectedText.includes("bag") || selectedText.includes("qtl") || selectedText.includes("quintal")) {
+        options = [
+            '<option value="50 KG">50 Kilogram (50 KG Bag)</option>',
+            '<option value="25 KG">25 Kilogram (25 KG)</option>',
+            '<option value="10 KG">10 Kilogram (10 KG)</option>',
+            '<option value="5 KG">5 Kilogram (5 KG)</option>',
+            '<option value="2 KG">2 Kilogram (2 KG)</option>',
+            '<option value="1 KG">1 Kilogram (1 KG)</option>',
+            '<option value="500 GM">500 Gram (500 GM)</option>',
+            '<option value="250 GM">250 Gram (250 GM)</option>',
+            '<option value="100 GM">100 Gram (100 GM)</option>',
+            '<option value="50 GM">50 Gram (50 GM)</option>',
+            '<option value="1 QTL">1 Quintal (100 KG / 1 QTL)</option>'
+        ];
+    } else {
+        options = [
+            '<option value="1 Unit">1 Unit / Pack</option>',
+            '<option value="100 GM">100 Gram (100 GM)</option>',
+            '<option value="250 GM">250 Gram (250 GM)</option>',
+            '<option value="500 GM">500 Gram (500 GM)</option>',
+            '<option value="1 KG">1 Kilogram (1 KG)</option>',
+            '<option value="100 ML">100 Millilitre (100 ML)</option>',
+            '<option value="250 ML">250 Millilitre (250 ML)</option>',
+            '<option value="500 ML">500 Millilitre (500 ML)</option>',
+            '<option value="1 LTR">1 Litre (1 LTR)</option>'
+        ];
+    }
+
+    options.push('<option value="__CUSTOM__">✏️ Custom Pack Size...</option>');
+    packSelect.innerHTML = options.join("");
+
+    if (packCustom) packCustom.style.display = "none";
+}
+
+function handlePackSizeChange(selectEl) {
+    const packCustom = document.getElementById("m-prod-pack-custom");
+    if (!packCustom) return;
+
+    if (selectEl.value === "__CUSTOM__") {
+        packCustom.style.display = "block";
+        packCustom.focus();
+    } else {
+        packCustom.style.display = "none";
     }
 }
 
