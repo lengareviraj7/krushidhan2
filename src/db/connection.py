@@ -75,7 +75,17 @@ class DatabaseManager:
                 if not has_tables:
                     conn.close()
                     self.initialize_database(include_seed=True)
-                    return self._create_raw_connection()
+                    conn = self._create_raw_connection()
+
+                # On Vercel / Cloud serverless, hydrate from Cloud database if connected
+                if os.environ.get("VERCEL") or os.environ.get("MONGODB_URI"):
+                    try:
+                        from src.db.cloud_sync import get_cloud_sync_manager
+                        sync_mgr = get_cloud_sync_manager()
+                        if sync_mgr.is_cloud_enabled:
+                            sync_mgr.hydrate_sqlite_from_cloud(conn)
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
