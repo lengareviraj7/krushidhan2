@@ -191,14 +191,18 @@ async function loadInitialLookups() {
         // Populate Manufacturers in product master
         const mfgSelect = document.getElementById("m-prod-mfg");
         if (mfgSelect && allLookups.manufacturers) {
-            mfgSelect.innerHTML = '<option value="">Select Manufacturer</option>' + 
-                allLookups.manufacturers.map(m => `<option value="${m.manufacturer_id}">${m.manufacturer_name}</option>`).join("");
+            const mfgOptions = ['<option value="">Select Manufacturer</option>']
+                .concat(allLookups.manufacturers.map(m => `<option value="${m.manufacturer_id}">${m.manufacturer_name}</option>`))
+                .concat(['<option value="__ADD_NEW__" style="font-weight: 700; color: #15803d;">➕ Add New Manufacturer...</option>']);
+            mfgSelect.innerHTML = mfgOptions.join("");
         }
 
         // Populate Units in product master
         const unitSelect = document.getElementById("m-prod-unit");
         if (unitSelect && allLookups.units) {
-            unitSelect.innerHTML = allLookups.units.map(u => `<option value="${u.unit_id}">${u.unit_name} (${u.symbol})</option>`).join("");
+            const unitOptions = allLookups.units.map(u => `<option value="${u.unit_id}">${u.unit_name} (${u.symbol})</option>`)
+                .concat(['<option value="__ADD_NEW__" style="font-weight: 700; color: #15803d;">➕ Add New Unit...</option>']);
+            unitSelect.innerHTML = unitOptions.join("");
         }
 
         // Populate Tax Groups in product master
@@ -2706,6 +2710,135 @@ function downloadInvoicePdf(saleId = null) {
         return;
     }
     window.open(`/api/sales/${id}/pdf`, "_blank");
+}
+
+/* ==========================================
+   MANUFACTURER & UNIT QUICK ADD FUNCTIONS
+========================================== */
+function handleMfgSelectChange(selectEl) {
+    if (selectEl.value === "__ADD_NEW__") {
+        selectEl.value = "";
+        openAddManufacturerModal();
+    }
+}
+
+function handleUnitSelectChange(selectEl) {
+    if (selectEl.value === "__ADD_NEW__") {
+        selectEl.value = "";
+        openAddUnitModal();
+    }
+}
+
+function openAddManufacturerModal() {
+    document.getElementById("new-mfg-name").value = "";
+    document.getElementById("new-mfg-contact").value = "";
+    document.getElementById("new-mfg-mobile").value = "";
+    const modal = document.getElementById("modal-add-manufacturer");
+    if (modal) modal.style.display = "flex";
+    setTimeout(() => {
+        const inp = document.getElementById("new-mfg-name");
+        if (inp) inp.focus();
+    }, 100);
+}
+
+function closeAddManufacturerModal() {
+    const modal = document.getElementById("modal-add-manufacturer");
+    if (modal) modal.style.display = "none";
+}
+
+async function saveNewManufacturer() {
+    const nameInp = document.getElementById("new-mfg-name");
+    const name = nameInp ? nameInp.value.trim() : "";
+    const contact = document.getElementById("new-mfg-contact")?.value.trim() || "";
+    const mobile = document.getElementById("new-mfg-mobile")?.value.trim() || "";
+
+    if (!name) {
+        alert("Manufacturer / Company Name is required!");
+        return;
+    }
+
+    try {
+        const res = await fetch("/api/masters/manufacturers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                manufacturer_name: name,
+                contact_person: contact || null,
+                mobile: mobile || null
+            })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            alert(`✅ Manufacturer "${name}" added successfully!`);
+            closeAddManufacturerModal();
+            await loadLookups();
+            const mfgSelect = document.getElementById("m-prod-mfg");
+            if (mfgSelect && data.manufacturer_id) {
+                mfgSelect.value = data.manufacturer_id;
+            }
+        } else {
+            const err = await res.json();
+            alert("Failed to add manufacturer: " + (err.detail || "Server error"));
+        }
+    } catch (err) {
+        alert("Error saving manufacturer: " + err.message);
+    }
+}
+
+function openAddUnitModal() {
+    document.getElementById("new-unit-name").value = "";
+    document.getElementById("new-unit-symbol").value = "";
+    const modal = document.getElementById("modal-add-unit");
+    if (modal) modal.style.display = "flex";
+    setTimeout(() => {
+        const inp = document.getElementById("new-unit-name");
+        if (inp) inp.focus();
+    }, 100);
+}
+
+function closeAddUnitModal() {
+    const modal = document.getElementById("modal-add-unit");
+    if (modal) modal.style.display = "none";
+}
+
+async function saveNewUnit() {
+    const nameInp = document.getElementById("new-unit-name");
+    const symbolInp = document.getElementById("new-unit-symbol");
+    const name = nameInp ? nameInp.value.trim() : "";
+    const symbol = symbolInp ? symbolInp.value.trim() : "";
+
+    if (!name || !symbol) {
+        alert("Both Unit Name and Unit Symbol are required!");
+        return;
+    }
+
+    try {
+        const res = await fetch("/api/masters/units", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                unit_name: name,
+                symbol: symbol
+            })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            alert(`✅ Unit "${name} (${symbol})" added successfully!`);
+            closeAddUnitModal();
+            await loadLookups();
+            const unitSelect = document.getElementById("m-prod-unit");
+            if (unitSelect && data.unit_id) {
+                unitSelect.value = data.unit_id;
+            }
+        } else {
+            const err = await res.json();
+            alert("Failed to add unit: " + (err.detail || "Server error"));
+        }
+    } catch (err) {
+        alert("Error saving unit: " + err.message);
+    }
 }
 
 

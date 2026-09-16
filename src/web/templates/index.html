@@ -973,8 +973,11 @@
                     </div>
 
                     <div class="form-group" style="margin-bottom: 10px;">
-                        <label>Manufacturer / Company</label>
-                        <select id="m-prod-mfg"></select>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label style="margin-bottom: 0;">Manufacturer / Company</label>
+                            <button type="button" class="btn btn-sm btn-outline-primary" style="padding: 2px 8px; font-size: 11px; font-weight: 600;" onclick="openAddManufacturerModal()">+ Add New</button>
+                        </div>
+                        <select id="m-prod-mfg" onchange="handleMfgSelectChange(this)"></select>
                     </div>
 
                     <div class="form-row" style="margin-bottom: 10px;">
@@ -983,8 +986,11 @@
                             <input type="text" id="m-prod-hsn" placeholder="e.g. 12099990">
                         </div>
                         <div class="form-group">
-                            <label>Unit / Packing</label>
-                            <select id="m-prod-unit"></select>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="margin-bottom: 0;">Unit / Packing</label>
+                                <button type="button" class="btn btn-sm btn-outline-primary" style="padding: 2px 8px; font-size: 11px; font-weight: 600;" onclick="openAddUnitModal()">+ Add New</button>
+                            </div>
+                            <select id="m-prod-unit" onchange="handleUnitSelectChange(this)"></select>
                         </div>
                     </div>
 
@@ -1750,6 +1756,62 @@
                         📥 Download Official PDF
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add New Manufacturer Modal -->
+    <div id="modal-add-manufacturer" class="modal-backdrop">
+        <div class="modal-dialog" style="width: 440px; max-width: 95%;">
+            <div class="modal-header">
+                <span>🏢 Add New Manufacturer / Company (नवीन कंपनी जोडा)</span>
+                <button class="modal-close" onclick="closeAddManufacturerModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 16px;">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Manufacturer / Company Name <span style="color:#ef4444;">*</span></label>
+                    <input type="text" id="new-mfg-name" placeholder="e.g. Mahyco, Syngenta, Bayer, UPL, Tata" style="font-weight: 600;">
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Contact Person (Optional)</label>
+                    <input type="text" id="new-mfg-contact" placeholder="e.g. Rahul Sharma">
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Mobile / Phone (Optional)</label>
+                    <input type="text" id="new-mfg-mobile" placeholder="e.g. 9822000000">
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
+                <button class="btn btn-secondary" onclick="closeAddManufacturerModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveNewManufacturer()" style="background: #15803d; border-color: #15803d; font-weight: 700;">
+                    💾 Save Manufacturer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add New Unit Modal -->
+    <div id="modal-add-unit" class="modal-backdrop">
+        <div class="modal-dialog" style="width: 440px; max-width: 95%;">
+            <div class="modal-header">
+                <span>📦 Add New Measurement Unit (नवीन युनिट/पॅकिंग)</span>
+                <button class="modal-close" onclick="closeAddUnitModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 16px;">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Unit Name <span style="color:#ef4444;">*</span></label>
+                    <input type="text" id="new-unit-name" placeholder="e.g. Bottle, Pouch, Can, Strip, Tin, Box" style="font-weight: 600;">
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Unit Symbol / Abbreviation <span style="color:#ef4444;">*</span></label>
+                    <input type="text" id="new-unit-symbol" placeholder="e.g. BTL, PCH, CAN, STP, TIN, BOX" style="font-weight: 600;">
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
+                <button class="btn btn-secondary" onclick="closeAddUnitModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveNewUnit()" style="background: #15803d; border-color: #15803d; font-weight: 700;">
+                    💾 Save Unit
+                </button>
             </div>
         </div>
     </div>

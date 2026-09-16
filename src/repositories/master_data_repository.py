@@ -41,10 +41,17 @@ class MasterDataRepository(BaseRepository):
 
     # ---------------- Manufacturer CRUD ----------------
     def create_manufacturer(self, mfg: Manufacturer) -> int:
+        return self.get_or_create_manufacturer(mfg.manufacturer_name, mfg.contact_person, mfg.mobile, mfg.address)
+
+    def get_or_create_manufacturer(self, manufacturer_name: str, contact_person: Optional[str] = None, mobile: Optional[str] = None, address: Optional[str] = None) -> int:
+        name_clean = manufacturer_name.strip()
+        existing = self.db.fetch_one("SELECT manufacturer_id FROM manufacturers WHERE LOWER(manufacturer_name) = LOWER(?);", (name_clean,))
+        if existing:
+            return existing['manufacturer_id']
         sql = "INSERT INTO manufacturers (manufacturer_name, contact_person, mobile, address) VALUES (?, ?, ?, ?);"
         with self.db.transaction() as conn:
             cursor = conn.cursor()
-            cursor.execute(sql, (mfg.manufacturer_name, mfg.contact_person, mfg.mobile, mfg.address))
+            cursor.execute(sql, (name_clean, contact_person, mobile, address))
             return cursor.lastrowid
 
     def get_all_manufacturers(self) -> List[Manufacturer]:
@@ -59,6 +66,18 @@ class MasterDataRepository(BaseRepository):
     def get_all_units(self) -> List[Unit]:
         rows = self.db.fetch_all("SELECT * FROM units ORDER BY unit_name ASC;")
         return [Unit(**dict(r)) for r in rows]
+
+    def create_unit(self, unit: Unit) -> int:
+        name_clean = unit.unit_name.strip()
+        symbol_clean = (unit.symbol or name_clean).strip()
+        existing = self.db.fetch_one("SELECT unit_id FROM units WHERE LOWER(unit_name) = LOWER(?) OR LOWER(symbol) = LOWER(?);", (name_clean, symbol_clean))
+        if existing:
+            return existing['unit_id']
+        sql = "INSERT INTO units (unit_name, symbol) VALUES (?, ?);"
+        with self.db.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql, (name_clean, symbol_clean))
+            return cursor.lastrowid
 
     def get_all_tax_groups(self) -> List[TaxGroup]:
         rows = self.db.fetch_all("SELECT * FROM tax_groups WHERE is_active = 1 ORDER BY tax_group_id ASC;")

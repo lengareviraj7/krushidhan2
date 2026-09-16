@@ -146,3 +146,25 @@ def test_performance_indexes_created(db_manager):
     assert "idx_stock_batches_exp" in indexes
     assert "idx_sales_date" in indexes
     assert "idx_purchases_date" in indexes
+
+
+def test_create_manufacturer_and_unit(db_manager):
+    """Verify creating dynamic manufacturer and unit in MasterDataRepository."""
+    from src.repositories.master_data_repository import MasterDataRepository
+    from src.models.master_data import Unit, Manufacturer
+
+    repo = MasterDataRepository(db_manager)
+
+    # 1. Create Manufacturer
+    mfg_id = repo.get_or_create_manufacturer("Tata Rallis")
+    assert mfg_id > 0
+    # Retrieve again (idempotent)
+    mfg_id_2 = repo.get_or_create_manufacturer("Tata Rallis")
+    assert mfg_id == mfg_id_2
+
+    # 2. Create Unit
+    unit_id = repo.create_unit(Unit(unit_name="Bottle", symbol="BTL"))
+    assert unit_id > 0
+    # Retrieve again (idempotent)
+    unit_id_2 = repo.create_unit(Unit(unit_name="Bottle", symbol="BTL"))
+    assert unit_id == unit_id_2

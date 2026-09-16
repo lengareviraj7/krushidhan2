@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from src.db.connection import get_db_manager
-from src.models.master_data import Category, Crop, Customer, Manufacturer, Product, Supplier
+from src.models.master_data import Category, Crop, Customer, Manufacturer, Product, Supplier, Unit
 from src.repositories.master_data_repository import MasterDataRepository
 
 router = APIRouter(prefix="/api/masters", tags=["Masters"])
@@ -22,6 +22,26 @@ def get_all_lookup_data():
         "tax_groups": repo.get_all_tax_groups(),
         "crops": repo.get_all_crops(),
     }
+
+
+@router.post("/manufacturers")
+def create_manufacturer(mfg: Manufacturer):
+    repo = MasterDataRepository(get_db_manager())
+    try:
+        mfg_id = repo.get_or_create_manufacturer(mfg.manufacturer_name, mfg.contact_person, mfg.mobile, mfg.address)
+        return {"success": True, "manufacturer_id": mfg_id, "manufacturer_name": mfg.manufacturer_name}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/units")
+def create_unit(unit: Unit):
+    repo = MasterDataRepository(get_db_manager())
+    try:
+        unit_id = repo.create_unit(unit)
+        return {"success": True, "unit_id": unit_id, "unit_name": unit.unit_name, "symbol": unit.symbol or unit.unit_name}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/products")
