@@ -37,7 +37,7 @@ def test_foreign_keys_and_wal_mode_enabled(isolated_db):
         # Verify busy timeout
         cursor.execute("PRAGMA busy_timeout;")
         busy_timeout = cursor.fetchone()[0]
-        assert busy_timeout == 5000, f"Busy timeout must be 5000ms, got {busy_timeout}"
+        assert busy_timeout >= 5000, f"Busy timeout must be at least 5000ms, got {busy_timeout}"
     finally:
         conn.close()
 

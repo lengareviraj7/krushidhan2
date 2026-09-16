@@ -723,7 +723,7 @@ async function submitSalesBill() {
 
         if (res.ok && result.success) {
             currentSavedSaleId = result.sale_id;
-            // Show on-screen Crystal Reports Invoice Preview Modal
+            saveBillToLocalBackup(salePayload, result.sale_id);
             openInvoicePreviewModal(salePayload, result.sale_id);
             resetPosCart();
             await refreshProductList();
@@ -733,8 +733,11 @@ async function submitSalesBill() {
             alert(`Error: ${result.detail || "Failed to save bill"}`);
         }
     } catch (err) {
-        console.error(err);
-        alert("Failed to submit bill: " + err.message);
+        console.error("Network error submitting POS bill:", err);
+        queuePendingOfflineBill(salePayload);
+        alert("⚠️ Network connection offline/weak. Bill saved locally on this device and will auto-sync to database as soon as internet connects!");
+        openInvoicePreviewModal(salePayload, "OFFLINE-" + Date.now());
+        resetPosCart();
     }
 }
 
@@ -3198,6 +3201,77 @@ async function addSelectedMultiProductsToCart() {
     closeMultiProductModal();
     alert(`✅ Added ${addedCount} selected product(s) to Counter Bill!`);
 }
+
+/* ==========================================
+   OFFLINE & MULTI-DEVICE BILL PERSISTENCE
+========================================== */
+
+function saveBillToLocalBackup(salePayload, saleId) {
+    try {
+        const stored = JSON.parse(localStorage.getItem("krushidhan_saved_bills") || "[]");
+        stored.unshift({
+            sale_id: saleId,
+            payload: salePayload,
+            saved_at: new Date().toISOString()
+        });
+        if (stored.length > 150) stored.length = 150;
+        localStorage.setItem("krushidhan_saved_bills", JSON.stringify(stored));
+    } catch (e) {
+        console.warn("Could not save bill to localStorage:", e);
+    }
+}
+
+function queuePendingOfflineBill(salePayload) {
+    try {
+        const pending = JSON.parse(localStorage.getItem("krushidhan_pending_bills") || "[]");
+        pending.push({
+            payload: salePayload,
+            created_at: new Date().toISOString()
+        });
+        localStorage.setItem("krushidhan_pending_bills", JSON.stringify(pending));
+    } catch (e) {
+        console.warn("Could not queue pending bill to localStorage:", e);
+    }
+}
+
+async function syncPendingOfflineBills() {
+    try {
+        const pending = JSON.parse(localStorage.getItem("krushidhan_pending_bills") || "[]");
+        if (!pending || pending.length === 0) return;
+
+        const remaining = [];
+        for (const item of pending) {
+            try {
+                const res = await fetch("/api/sales/create", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(item.payload)
+                });
+                if (res.ok) {
+                    const result = await res.json();
+                    saveBillToLocalBackup(item.payload, result.sale_id);
+                } else {
+                    remaining.push(item);
+                }
+            } catch (err) {
+                remaining.push(item);
+            }
+        }
+
+        localStorage.setItem("krushidhan_pending_bills", JSON.stringify(remaining));
+        if (pending.length > remaining.length) {
+            console.log(`✅ Synced ${pending.length - remaining.length} pending bill(s) to database!`);
+            await refreshProductList();
+            await refreshCustomerList();
+        }
+    } catch (e) {
+        console.error("Error syncing pending bills:", e);
+    }
+}
+
+// Auto-sync whenever internet connects or on initial load
+window.addEventListener("online", syncPendingOfflineBills);
+setTimeout(syncPendingOfflineBills, 2000);
 
 
 
