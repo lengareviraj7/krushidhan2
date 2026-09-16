@@ -150,6 +150,38 @@ class CloudSyncManager:
             logger.error(f"Failed to sync {collection_name} record to Cloud: {e}")
         return False
 
+    def sync_all_tables_to_cloud(self, conn: sqlite3.Connection) -> bool:
+        """Reads all SQLite table records and upserts them to Cloud MongoDB collections."""
+        if not self.is_cloud_enabled:
+            return False
+
+        try:
+            cur = conn.cursor()
+            table_key_map = {
+                "products": "product_id",
+                "stock_batches": "batch_id",
+                "customers": "customer_id",
+                "sales": "sale_id",
+                "categories": "category_id",
+                "manufacturers": "manufacturer_id",
+                "units": "unit_id",
+                "expenses": "expense_id"
+            }
+            for tbl, key_field in table_key_map.items():
+                cur.execute(f"SELECT * FROM {tbl};")
+                rows = cur.fetchall()
+                if rows:
+                    col = self._db[tbl]
+                    for r in rows:
+                        doc = dict(r)
+                        if key_field in doc:
+                            col.replace_one({key_field: doc[key_field]}, doc, upsert=True)
+            cur.close()
+            return True
+        except Exception as e:
+            logger.error(f"Error syncing SQLite to Cloud MongoDB: {e}")
+            return False
+
 
 _global_cloud_sync: Optional[CloudSyncManager] = None
 

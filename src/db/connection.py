@@ -123,6 +123,14 @@ class DatabaseManager:
         try:
             yield conn
             conn.commit()
+            if os.environ.get("VERCEL") or os.environ.get("MONGODB_URI"):
+                try:
+                    from src.db.cloud_sync import get_cloud_sync_manager
+                    sync_mgr = get_cloud_sync_manager()
+                    if sync_mgr.is_cloud_enabled:
+                        sync_mgr.sync_all_tables_to_cloud(conn)
+                except Exception:
+                    pass
         except Exception:
             conn.rollback()
             raise
