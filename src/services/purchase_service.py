@@ -53,7 +53,8 @@ class PurchaseService:
                 batch_id = self.inventory_repo.upsert_batch(batch, conn=conn)
 
                 # Get product current balance for ledger
-                curr_stock = self.inventory_repo.get_product_total_stock(item.product_id)
+                curr_stock = self.inventory_repo.get_product_total_stock(item.product_id, conn=conn)
+
 
                 self.inventory_repo.record_stock_movement(
                     StockLedgerEntry(

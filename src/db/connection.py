@@ -146,6 +146,45 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def check_integrity(self) -> List[str]:
+        """Runs SQLite PRAGMA integrity_check and returns results (e.g. ['ok'])."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA integrity_check;")
+            rows = cursor.fetchall()
+            return [str(r[0]) for r in rows if r]
+        finally:
+            conn.close()
+
+    def check_foreign_keys(self) -> List[Tuple[Any, ...]]:
+        """Runs SQLite PRAGMA foreign_key_check and returns constraint violation tuples."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA foreign_key_check;")
+            rows = cursor.fetchall()
+            return [tuple(r) for r in rows]
+        finally:
+            conn.close()
+
+    def get_schema_version(self) -> int:
+        """Returns the current database schema version from schema_version table."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version' LIMIT 1;")
+            if not cursor.fetchone():
+                return 0
+            cursor.execute("SELECT MAX(version_number) FROM schema_version;")
+            row = cursor.fetchone()
+            return int(row[0]) if row and row[0] is not None else 0
+        except Exception:
+            return 0
+        finally:
+            conn.close()
+
+
 
 # Default singleton instance for convenience
 _default_db_manager: Optional[DatabaseManager] = None

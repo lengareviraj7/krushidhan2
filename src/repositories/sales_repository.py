@@ -209,3 +209,135 @@ class SalesRepository(BaseRepository):
         """Increment reprint count."""
         with self.db.transaction() as conn:
             conn.execute("UPDATE sales SET print_count = print_count + 1 WHERE sale_id = ?;", (sale_id,))
+
+    def get_already_returned_qty_map(self, sale_id: int, conn: Optional[sqlite3.Connection] = None) -> Dict[int, float]:
+        """Returns map of {product_id: total_returned_qty} for a specific sale_id."""
+        executor = conn if conn is not None else self.db.get_connection()
+        try:
+            cursor = executor.cursor()
+            sql = """
+                SELECT sri.product_id, COALESCE(SUM(sri.qty), 0) as total_returned
+                FROM sales_return_items sri
+                JOIN sales_returns sr ON sri.return_id = sr.return_id
+                WHERE sr.sale_id = ?
+                GROUP BY sri.product_id;
+            """
+            cursor.execute(sql, (sale_id,))
+            rows = cursor.fetchall()
+            return {int(r["product_id"]): float(r["total_returned"]) for r in rows}
+        finally:
+            if conn is None:
+                executor.close()
+
+    def create_sale_return(self, ret: SalesReturn, conn: Optional[sqlite3.Connection] = None) -> int:
+        """Persist sales return header and line items."""
+        executor = conn if conn is not None else self.db.get_connection()
+        cursor = executor.cursor()
+
+        if not ret.return_no:
+            ret.return_no = self.generate_next_return_no()
+        else:
+            cursor.execute("SELECT 1 FROM sales_returns WHERE return_no = ?;", (ret.return_no,))
+            if cursor.fetchone():
+                ret.return_no = self.generate_next_return_no()
+
+        sql_head = """
+            INSERT INTO sales_returns (
+                return_no, return_date, sale_id, customer_id,
+                total_taxable, total_tax, round_off, net_amount, remarks
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """
+        sql_item = """
+            INSERT INTO sales_return_items (
+                return_id, product_id, batch_id, qty, sale_rate,
+                taxable_amount, tax_amount, total_amount, reason
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """
+
+        try:
+            cursor.execute(
+                sql_head,
+                (
+                    ret.return_no,
+                    ret.return_date,
+                    ret.sale_id,
+                    ret.customer_id,
+                    ret.total_taxable,
+                    ret.total_tax,
+                    ret.round_off,
+                    ret.net_amount,
+                    ret.remarks,
+                ),
+            )
+            return_id = cursor.lastrowid
+
+            for item in ret.items:
+                cursor.execute(
+                    sql_item,
+                    (
+                        return_id,
+                        item.product_id,
+                        item.batch_id,
+                        item.qty,
+                        item.sale_rate,
+                        item.taxable_amount,
+                        item.tax_amount,
+                        item.total_amount,
+                        item.reason,
+                    ),
+                )
+
+            if conn is None:
+                executor.commit()
+            return return_id
+        finally:
+            if conn is None:
+                executor.close()
+
+    def get_sale_return_by_id(self, return_id: int) -> Optional[Dict[str, Any]]:
+        """Fetch sale return header and items detail."""
+        sql_head = """
+            SELECT 
+                sr.*,
+                c.customer_name,
+                c.mobile as customer_mobile,
+                s.invoice_no as original_invoice_no
+            FROM sales_returns sr
+            JOIN customers c ON sr.customer_id = c.customer_id
+            LEFT JOIN sales s ON sr.sale_id = s.sale_id
+            WHERE sr.return_id = ?;
+        """
+        row = self.db.fetch_one(sql_head, (return_id,))
+        if not row:
+            return None
+
+        ret_dict = dict(row)
+        sql_items = """
+            SELECT 
+                sri.*,
+                p.product_name,
+                sb.batch_no
+            FROM sales_return_items sri
+            JOIN products p ON sri.product_id = p.product_id
+            LEFT JOIN stock_batches sb ON sri.batch_id = sb.batch_id
+            WHERE sri.return_id = ?;
+        """
+        items = self.db.fetch_all(sql_items, (return_id,))
+        ret_dict["items"] = [dict(i) for i in items]
+        return ret_dict
+
+    def get_sale_returns_list(self) -> List[Dict[str, Any]]:
+        """Fetch list of all past sale returns."""
+        sql = """
+            SELECT 
+                sr.*,
+                c.customer_name,
+                s.invoice_no as original_invoice_no
+            FROM sales_returns sr
+            JOIN customers c ON sr.customer_id = c.customer_id
+            LEFT JOIN sales s ON sr.sale_id = s.sale_id
+            ORDER BY sr.return_date DESC, sr.return_id DESC;
+        """
+        rows = self.db.fetch_all(sql)
+        return [dict(r) for r in rows]
+

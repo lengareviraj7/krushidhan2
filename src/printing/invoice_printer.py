@@ -42,14 +42,14 @@ class InvoicePrinter:
         self.settings = company_settings or CompanySettings(
             company_name="कृषीधन कृषी उद्योग समूह",
             mobile="9503573620 / 7218409780",
-            address="नागोबा कट्ट्याशेजारी, विसापूर, ता. तासगाव.",
-            city="विसापूर (तासगाव)",
+            address="गट नं. १/७, घर नं. २५२, नागोबा कट्ट्याशेजारी, विसापूर, ता. तासगाव, जि. सांगली",
+            city="विसापूर, ता. तासगाव, जि. सांगली",
             state="Maharashtra",
             email="akashlengare15@gmail.com",
-            gstin="27AAAAA0000A1Z5",
-            dl_fertilizer="LIC/FERT/2026/0123",
-            dl_pesticide="LIC/PEST/2026/0456",
-            dl_seed="LIC/SEED/2026/0789",
+            gstin="27BSXPL3414R1Z5",
+            dl_fertilizer="LCFRD0920250506SNG",
+            dl_pesticide="LCID0920250497SNG",
+            dl_seed="LCSD0920250506SNG",
         )
 
     def _number_to_words(self, number: float) -> str:
@@ -202,10 +202,10 @@ class InvoicePrinter:
         pay_mode_label = sale.payment_mode.upper() if sale.payment_mode else "CASH"
         lic_box_html = f"""
         <b>TAX INVOICE : {pay_mode_label}</b><br/>
-        Fertilizer L. No : {self.settings.dl_fertilizer or 'LIC/FERT/2026/0123'}<br/>
-        Insectiside L. No: {self.settings.dl_pesticide or 'LIC/PEST/2026/0456'}<br/>
-        Seeds L. No &nbsp;&nbsp;&nbsp;&nbsp;: {self.settings.dl_seed or 'LIC/SEED/2026/0789'}<br/>
-        Cotton L. No &nbsp;&nbsp;&nbsp;: LIC/COTT/2026/0912
+        Fertilizer L. No : {self.settings.dl_fertilizer or '-'}<br/>
+        Insectiside L. No: {self.settings.dl_pesticide or '-'}<br/>
+        Seeds L. No &nbsp;&nbsp;&nbsp;&nbsp;: {self.settings.dl_seed or '-'}<br/>
+        GSTIN : {self.settings.gstin or '-'}
         """
         lic_p = Paragraph(lic_box_html, small_text)
 

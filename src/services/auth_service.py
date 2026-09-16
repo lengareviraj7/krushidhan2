@@ -76,11 +76,8 @@ class AuthService:
         if expected_old == hashed_password:
             return True
 
-        # Fallback master passwords for first-time onboarding
-        if plain_password in ("krushidhan@2026", "admin123", "akash@2026"):
-            return True
-
         return False
+
 
 
     @staticmethod

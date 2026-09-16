@@ -10,7 +10,8 @@ class SaleItem(BaseModel):
     sale_item_id: Optional[int] = None
     sale_id: Optional[int] = None
     product_id: int
-    batch_id: int
+    batch_id: Optional[int] = 0
+
     product_name: Optional[str] = None
     batch_no: Optional[str] = None
     exp_date: Optional[str] = None

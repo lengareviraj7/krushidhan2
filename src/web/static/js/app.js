@@ -90,18 +90,58 @@ function initDefaultDates() {
     if (expDate && !expDate.value) expDate.value = today;
 }
 
+// ----------------- Mobile Drawer & Touch Helpers -----------------
+function toggleMobileMenu() {
+    const drawer = document.getElementById("mobile-drawer");
+    const backdrop = document.getElementById("mobile-drawer-backdrop");
+    if (drawer && backdrop) {
+        const isOpen = drawer.classList.contains("open");
+        if (isOpen) {
+            drawer.classList.remove("open");
+            backdrop.classList.remove("show");
+        } else {
+            drawer.classList.add("open");
+            backdrop.classList.add("show");
+        }
+    }
+}
+
+function closeMobileMenu() {
+    const drawer = document.getElementById("mobile-drawer");
+    const backdrop = document.getElementById("mobile-drawer-backdrop");
+    if (drawer) drawer.classList.remove("open");
+    if (backdrop) backdrop.classList.remove("show");
+}
+
+function stepPosQty(delta) {
+    const qtyInput = document.getElementById("pos-item-qty");
+    if (!qtyInput) return;
+    let val = parseFloat(qtyInput.value) || 1;
+    val = Math.max(0.1, val + delta);
+    qtyInput.value = Math.round(val * 100) / 100;
+}
+
 // ----------------- Tab Navigation -----------------
 function initTabs() {
-    const tabs = document.querySelectorAll(".nav-tab");
+    const tabs = document.querySelectorAll(".nav-tab, .mobile-drawer-item, .mobile-bottom-nav-item");
     tabs.forEach(tab => {
         tab.addEventListener("click", () => {
-            tabs.forEach(t => t.classList.remove("active"));
-            document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
-
-            tab.classList.add("active");
             const targetId = tab.getAttribute("data-tab");
+            if (!targetId) return;
+
+            document.querySelectorAll(".nav-tab, .mobile-drawer-item, .mobile-bottom-nav-item").forEach(t => {
+                if (t.getAttribute("data-tab") === targetId) {
+                    t.classList.add("active");
+                } else {
+                    t.classList.remove("active");
+                }
+            });
+
+            document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
             const targetPane = document.getElementById(targetId);
             if (targetPane) targetPane.classList.add("active");
+
+            closeMobileMenu();
 
             // Auto-refresh relevant tab data
             if (targetId === "tab-farmer-status") loadFarmerStatusList();
@@ -112,6 +152,7 @@ function initTabs() {
             if (targetId === "tab-gst") loadGSTR1();
             if (targetId === "tab-statutory") loadStatutoryRegister();
             if (targetId === "tab-masters") loadMasterTables();
+            if (targetId === "tab-settings") loadSettings();
         });
     });
 }
@@ -491,23 +532,27 @@ function removePosItem(index) {
 
 function renderPosCart() {
     const tbody = document.getElementById("pos-cart-tbody");
-    if (!tbody) return;
+    const mobileCardsContainer = document.getElementById("pos-cart-mobile-cards");
 
     if (currentCart.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding: 24px;">No items added yet. Search or select a product above.</td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding: 24px;">No items added yet. Search or select a product above.</td></tr>';
+        if (mobileCardsContainer) mobileCardsContainer.innerHTML = '<div class="text-center text-muted card" style="padding: 20px; font-size: 13px;">No items added yet. Search or select a product above.</div>';
         updatePosTotals(0, 0, 0, 0);
         return;
     }
 
     let totTaxable = 0, totCgst = 0, totSgst = 0, totGross = 0;
 
-    tbody.innerHTML = currentCart.map((item, idx) => {
+    const tableRowsHtml = [];
+    const mobileCardsHtml = [];
+
+    currentCart.forEach((item, idx) => {
         totTaxable += item.taxable_amount;
         totCgst += item.cgst_amount;
         totSgst += item.sgst_amount;
         totGross += item.total_amount;
 
-        return `
+        tableRowsHtml.push(`
             <tr>
                 <td class="text-center">${idx + 1}</td>
                 <td><b>${item.product_name}</b><br/><small class="text-muted">HSN: ${item.hsn_code||'-'}</small></td>
@@ -519,8 +564,29 @@ function renderPosCart() {
                 <td class="text-right"><b>₹${item.total_amount.toFixed(2)}</b></td>
                 <td class="text-center"><button class="btn btn-danger btn-sm" onclick="removePosItem(${idx})">✕</button></td>
             </tr>
-        `;
-    }).join("");
+        `);
+
+        mobileCardsHtml.push(`
+            <div class="cart-item-card">
+                <div class="cart-item-card-header">
+                    <span class="cart-item-title">${idx + 1}. ${item.product_name}</span>
+                    <button class="btn btn-danger btn-sm" onclick="removePosItem(${idx})" title="Remove item" style="padding: 3px 8px; font-size: 12px;">✕</button>
+                </div>
+                <div class="cart-item-card-meta">
+                    <span class="badge badge-fefo">${item.batch_no}</span>
+                    <span class="text-muted">Exp: ${item.exp_date||'-'}</span>
+                    <span class="text-muted">HSN: ${item.hsn_code||'-'}</span>
+                </div>
+                <div class="cart-item-card-calc">
+                    <span>${item.qty} ${item.unit_name||''} × ₹${item.sale_rate.toFixed(2)} ${item.discount_percent > 0 ? `(${item.discount_percent}% off)` : ''}</span>
+                    <span class="cart-item-total">₹${item.total_amount.toFixed(2)}</span>
+                </div>
+            </div>
+        `);
+    });
+
+    if (tbody) tbody.innerHTML = tableRowsHtml.join("");
+    if (mobileCardsContainer) mobileCardsContainer.innerHTML = mobileCardsHtml.join("");
 
     updatePosTotals(totTaxable, totCgst, totSgst, totGross);
 }
@@ -533,6 +599,9 @@ function updatePosTotals(taxable, cgst, sgst, gross) {
     document.getElementById("pos-tot-gst").innerText = `₹${(cgst + sgst).toFixed(2)}`;
     document.getElementById("pos-tot-round").innerText = `₹${roundOff.toFixed(2)}`;
     document.getElementById("pos-grand-total").innerText = `₹${netRound.toFixed(2)}`;
+
+    const mobTotal = document.getElementById("pos-mobile-grand-total");
+    if (mobTotal) mobTotal.innerText = `₹${netRound.toFixed(2)}`;
 
     const paidInput = document.getElementById("pos-paid-amount");
     if (paidInput) paidInput.value = netRound;
@@ -1795,27 +1864,36 @@ function updateUserInterfaceForRole() {
 
     const nameEl = document.getElementById("user-display-name");
     const roleEl = document.getElementById("user-display-role");
-    
-    if (nameEl) nameEl.textContent = currentUser.full_name || currentUser.username;
+    const drawerNameEl = document.getElementById("drawer-user-name");
+    const drawerRoleEl = document.getElementById("drawer-user-role");
+
+    const displayName = currentUser.full_name || currentUser.username;
+    const displayRole = currentUser.role || "OPERATOR";
+    const roleClass = currentUser.role === "ADMIN" ? "user-role-tag role-admin" : "user-role-tag role-operator";
+
+    if (nameEl) nameEl.textContent = displayName;
     if (roleEl) {
-        roleEl.textContent = currentUser.role || "OPERATOR";
-        if (currentUser.role === "ADMIN") {
-            roleEl.className = "user-role-tag role-admin";
-        } else {
-            roleEl.className = "user-role-tag role-operator";
-        }
+        roleEl.textContent = displayRole;
+        roleEl.className = roleClass;
+    }
+    if (drawerNameEl) drawerNameEl.textContent = displayName;
+    if (drawerRoleEl) {
+        drawerRoleEl.textContent = displayRole;
+        drawerRoleEl.className = roleClass;
     }
 
     // Role Based Navigation Tabs and Elements
     const pnlTab = document.querySelector('.nav-tab[data-tab="tab-pnl"]');
-    const settingsTab = document.querySelector('.nav-tab[data-tab="tab-settings"]');
+    const drawerPnlTab = document.querySelector('.mobile-drawer-item[data-tab="tab-pnl"]');
     const userMgmtCard = document.getElementById("settings-user-mgmt-card");
 
     if (currentUser.role !== "ADMIN") {
         if (pnlTab) pnlTab.style.display = "none";
+        if (drawerPnlTab) drawerPnlTab.style.display = "none";
         if (userMgmtCard) userMgmtCard.style.display = "none";
     } else {
         if (pnlTab) pnlTab.style.display = "flex";
+        if (drawerPnlTab) drawerPnlTab.style.display = "flex";
         if (userMgmtCard) userMgmtCard.style.display = "block";
     }
 }

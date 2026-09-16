@@ -99,7 +99,7 @@ INSERT OR IGNORE INTO expense_categories (category_id, category_name, descriptio
 (5, 'Tea, Water & Refreshments (चहा / आदरातिथ्य)', 'Shop hospitality expenses'),
 (6, 'Stationery & Printing (स्टेशनरी / छपाई)', 'Billing paper, toner and shop supplies');
 
--- 10. Initial Default Company Profile
+-- 10. Real Company Profile — Krushidhan Krushi Udyog Samuh
 INSERT OR IGNORE INTO company_settings (
     setting_id, company_name, address, city, state, pincode, mobile, email,
     gstin, dl_fertilizer, dl_pesticide, dl_seed,
@@ -107,20 +107,20 @@ INSERT OR IGNORE INTO company_settings (
 ) VALUES (
     1,
     'कृषीधन कृषी उद्योग समूह',
-    'नागोबा कट्ट्याशेजारी, विसापूर, ता. तासगाव.',
-    'विसापूर (तासगाव)',
+    'गट नं. १/७, घर नं. २५२, नागोबा कट्ट्याशेजारी, विसापूर, ता. तासगाव, जि. सांगली',
+    'विसापूर, ता. तासगाव, जि. सांगली',
     'Maharashtra',
-    '416312',
+    '416314',
     '9503573620 / 7218409780',
     'akashlengare15@gmail.com',
-    '27AAAAA0000A1Z5',
-    'LIC/FERT/2026/0123',
-    'LIC/PEST/2026/0456',
-    'LIC/SEED/2026/0789',
-    'State Bank of India',
-    '389912345678',
-    'SBIN0000472',
-    '१. बिलामधील नमूद केलेली कीटकनाशके मी माझ्या मर्जीने घेतलेली आहेत.\n२. उत्पादनाची हमी संबंधित उत्पादक कंपनीची राहील.\n३. सर्व वाद तासगाव / सांगली न्यायालयाच्या कार्यक्षेत्रात.',
+    '27BSXPL3414R1Z5',
+    'LCFRD0920250506SNG',
+    'LCID0920250497SNG',
+    'LCSD0920250506SNG',
+    'IDBI Bank',
+    '409002609103',
+    'IBKL0000055',
+    '१. बिलामधील नमूद केलेली कीटकनाशके मी माझ्या मर्जीने घेतलेली आहेत.\n२. उत्पादनाची हमी संबंधित उत्पादक कंपनीची राहील.\n३. सर्व वाद तासगाव / सांगली न्यायालयाच्या कार्यक्षेत्रात.\n४. माल एकदा विकल्यानंतर परत घेतला जाणार नाही.\n५. उधारीचा व्यवहार ३० दिवसांत पूर्ण करावा.',
     'A4'
 );
 

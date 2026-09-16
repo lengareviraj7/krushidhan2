@@ -101,11 +101,8 @@ class InventoryRepository(BaseRepository):
         conn: Optional[sqlite3.Connection] = None,
     ) -> StockBatch:
         """
-        Guarantees retrieval or creation of a valid stock batch for billing:
-        1. Try by batch_id if provided.
-        2. Try by (product_id, batch_no) if provided.
-        3. Try best available FEFO batch for product_id.
-        4. If no batch exists, auto-create a standard stock batch with sufficient qty so the billing NEVER fails!
+        Retrieves a valid stock batch for billing with stock availability validation.
+        No phantom batch creation is allowed if stock is insufficient.
         """
         executor = conn if conn is not None else self.db.get_connection()
         try:
@@ -114,17 +111,31 @@ class InventoryRepository(BaseRepository):
                 cursor.execute("SELECT * FROM stock_batches WHERE batch_id = ?;", (batch_id,))
                 row = cursor.fetchone()
                 if row:
-                    return StockBatch(**dict(row))
+                    b = StockBatch(**dict(row))
+                    if b.current_qty < sale_qty:
+                        raise ValueError(f"निवडलेल्या बॅचमध्ये साठा अपुरा आहे (Insufficient batch stock: available {b.current_qty}, requested {sale_qty}).")
+                    return b
 
             if batch_no and batch_no != "N/A":
                 cursor.execute("SELECT * FROM stock_batches WHERE product_id = ? AND batch_no = ?;", (product_id, batch_no))
                 row = cursor.fetchone()
                 if row:
-                    return StockBatch(**dict(row))
+                    b = StockBatch(**dict(row))
+                    if b.current_qty < sale_qty:
+                        raise ValueError(f"निवडलेल्या बॅचमध्ये साठा अपुरा आहे (Insufficient batch stock: available {b.current_qty}, requested {sale_qty}).")
+                    return b
 
-            # Try active FEFO batch
+            # Try active FEFO batch with sufficient quantity
             cursor.execute(
-                "SELECT * FROM stock_batches WHERE product_id = ? AND current_qty >= ? ORDER BY exp_date ASC, batch_id ASC LIMIT 1;",
+                """
+                SELECT * FROM stock_batches 
+                WHERE product_id = ? AND current_qty >= ? 
+                ORDER BY 
+                    CASE WHEN exp_date IS NULL OR exp_date = '' THEN 1 ELSE 0 END,
+                    exp_date ASC,
+                    batch_id ASC 
+                LIMIT 1;
+                """,
                 (product_id, sale_qty),
             )
             row = cursor.fetchone()
@@ -133,30 +144,15 @@ class InventoryRepository(BaseRepository):
 
             # Any batch with positive stock
             cursor.execute(
-                "SELECT * FROM stock_batches WHERE product_id = ? ORDER BY current_qty DESC, batch_id ASC LIMIT 1;",
+                "SELECT * FROM stock_batches WHERE product_id = ? AND current_qty > 0 ORDER BY current_qty DESC, batch_id ASC LIMIT 1;",
                 (product_id,),
             )
             row = cursor.fetchone()
             if row:
                 return StockBatch(**dict(row))
 
-            # Auto-create stock batch for this product so sale proceeds smoothly
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            batch_code = f"STK-{datetime.now().strftime('%y%m%d')}-{product_id}"
-            cursor.execute(
-                """
-                INSERT INTO stock_batches (product_id, batch_no, mfg_date, exp_date, purchase_rate, sale_rate, mrp, opening_qty, current_qty)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-                """,
-                (product_id, batch_code, today_str, None, sale_rate * 0.8, sale_rate, sale_rate, sale_qty + 100, sale_qty + 100),
-            )
-            new_id = cursor.lastrowid
-            if conn is None:
-                executor.commit()
-
-            cursor.execute("SELECT * FROM stock_batches WHERE batch_id = ?;", (new_id,))
-            new_row = cursor.fetchone()
-            return StockBatch(**dict(new_row))
+            # If no available stock batch exists, reject sale. NO PHANTOM BATCH CREATION!
+            raise ValueError(f"उत्पादनासाठी साठा उपलब्ध नाही (Insufficient stock available for Product ID {product_id}).")
         finally:
             if conn is None:
                 executor.close()
@@ -179,16 +175,26 @@ class InventoryRepository(BaseRepository):
 
     def deduct_batch_stock(self, batch_id: int, qty_to_deduct: float, conn: Optional[sqlite3.Connection] = None) -> None:
         """Deduct quantity from a specific batch and verify it does not go negative."""
-        sql = "UPDATE stock_batches SET current_qty = current_qty - ? WHERE batch_id = ?;"
         executor = conn if conn is not None else self.db.get_connection()
         try:
             cursor = executor.cursor()
+            cursor.execute("SELECT current_qty, batch_no FROM stock_batches WHERE batch_id = ?;", (batch_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError(f"Batch ID {batch_id} not found in database.")
+            
+            curr_qty = float(row["current_qty"])
+            if curr_qty < qty_to_deduct:
+                raise ValueError(f"साठा अपुरा आहे (Insufficient stock in batch '{row['batch_no']}': available {curr_qty}, requested {qty_to_deduct}).")
+
+            sql = "UPDATE stock_batches SET current_qty = current_qty - ? WHERE batch_id = ?;"
             cursor.execute(sql, (qty_to_deduct, batch_id))
             if conn is None:
                 executor.commit()
         finally:
             if conn is None:
                 executor.close()
+
 
     def add_batch_stock(self, batch_id: int, qty_to_add: float, conn: Optional[sqlite3.Connection] = None) -> None:
         """Add quantity back to a specific batch (e.g. on return or cancellation)."""
@@ -237,13 +243,18 @@ class InventoryRepository(BaseRepository):
             if conn is None:
                 executor.close()
 
-    def get_product_total_stock(self, product_id: int) -> float:
+    def get_product_total_stock(self, product_id: int, conn: Optional[sqlite3.Connection] = None) -> float:
         """Calculate total current stock across all batches for a given product."""
-        row = self.db.fetch_one(
-            "SELECT COALESCE(SUM(current_qty), 0) as total FROM stock_batches WHERE product_id = ?;",
-            (product_id,),
-        )
-        return float(row["total"]) if row else 0.0
+        executor = conn if conn is not None else self.db.get_connection()
+        try:
+            cursor = executor.cursor()
+            cursor.execute("SELECT COALESCE(SUM(current_qty), 0) as total FROM stock_batches WHERE product_id = ?;", (product_id,))
+            row = cursor.fetchone()
+            return float(row["total"]) if row else 0.0
+        finally:
+            if conn is None:
+                executor.close()
+
 
     def get_stock_inventory_summary(self, category_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get complete stock report with product details, batch numbers, expiry dates, and valuations (including newly added catalog products)."""

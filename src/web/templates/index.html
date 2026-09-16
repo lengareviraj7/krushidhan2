@@ -11,6 +11,7 @@
     <!-- Header / Branding & User Session Status -->
     <header>
         <div class="brand-box">
+            <button class="mobile-menu-toggle" id="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Toggle Navigation Menu">☰</button>
             <span style="font-size: 22px;">🌱</span>
             <div>
                 <div class="brand-title">KRUSHIDHAN AGRI-INPUT SHOP ERP</div>
@@ -32,8 +33,58 @@
         </div>
     </header>
 
+    <!-- Mobile Navigation Drawer & Overlay -->
+    <div id="mobile-drawer-backdrop" class="mobile-drawer-backdrop" onclick="closeMobileMenu()"></div>
+    <aside id="mobile-drawer" class="mobile-drawer">
+        <div class="drawer-header">
+            <div class="drawer-brand">🌱 KRUSHIDHAN ERP</div>
+            <button class="drawer-close-btn" onclick="closeMobileMenu()">✕</button>
+        </div>
+        <div class="drawer-user-info" id="drawer-user-info">
+            <span class="user-avatar-icon">👤</span>
+            <span id="drawer-user-name">आकाश लेंगारे</span>
+            <span id="drawer-user-role" class="user-role-tag role-admin">ADMIN</span>
+        </div>
+        <nav class="drawer-nav">
+            <div class="mobile-drawer-item active" data-tab="tab-pos">🧾 Counter Billing (POS)</div>
+            <div class="mobile-drawer-item" data-tab="tab-farmer-status">👨‍🌾 Farmer Status (शेतकरी खाते)</div>
+            <div class="mobile-drawer-item" data-tab="tab-supplier-khata">🏢 Supplier Khata (कंपनी खाते)</div>
+            <div class="mobile-drawer-item" data-tab="tab-purchase">📥 Inward Purchase</div>
+            <div class="mobile-drawer-item" data-tab="tab-inventory">📦 Live Stock & Expiry</div>
+            <div class="mobile-drawer-item" data-tab="tab-accounts">💰 Accounts & Day Book</div>
+            <div class="mobile-drawer-item" data-tab="tab-pnl">📈 Profit & Loss (नफा-तोटा)</div>
+            <div class="mobile-drawer-item" data-tab="tab-gst">📊 Statutory GST (GSTR-1)</div>
+            <div class="mobile-drawer-item" data-tab="tab-statutory">📜 Statutory Registers</div>
+            <div class="mobile-drawer-item" data-tab="tab-masters">📋 Product Catalog</div>
+            <div class="mobile-drawer-item" data-tab="tab-settings">⚙️ Shop Profile</div>
+        </nav>
+        <div class="drawer-footer">
+            <button class="btn btn-secondary btn-sm" onclick="triggerDatabaseBackup(); closeMobileMenu();" style="width: 100%; margin-bottom: 8px;">💾 1-Click Backup</button>
+            <button class="btn btn-danger btn-sm" onclick="handleLogout()" style="width: 100%;">🚪 Logout</button>
+        </div>
+    </aside>
 
-    <!-- Navigation Bar -->
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav id="mobile-bottom-nav" class="mobile-bottom-nav">
+        <div class="mobile-bottom-nav-item active" data-tab="tab-pos">
+            <span class="nav-icon">🧾</span>
+            <span class="nav-label">Billing</span>
+        </div>
+        <div class="mobile-bottom-nav-item" data-tab="tab-farmer-status">
+            <span class="nav-icon">👨‍🌾</span>
+            <span class="nav-label">Farmer</span>
+        </div>
+        <div class="mobile-bottom-nav-item" data-tab="tab-inventory">
+            <span class="nav-icon">📦</span>
+            <span class="nav-label">Stock</span>
+        </div>
+        <div class="mobile-bottom-nav-item" onclick="toggleMobileMenu()">
+            <span class="nav-icon">☰</span>
+            <span class="nav-label">Menu</span>
+        </div>
+    </nav>
+
+    <!-- Desktop Navigation Bar -->
     <nav class="nav-tabs">
         <div class="nav-tab active" data-tab="tab-pos">🧾 Counter Billing (POS)</div>
         <div class="nav-tab" data-tab="tab-farmer-status">👨‍🌾 Farmer Status & Khata (शेतकरी खाते)</div>
@@ -109,10 +160,14 @@
                                 <select id="pos-item-batch" style="font-weight: 500;"></select>
                             </div>
                         </div>
-                        <div class="form-row" style="margin-bottom: 0; align-items: flex-end;">
+                        <div class="form-row mobile-2col" style="margin-bottom: 0; align-items: flex-end;">
                             <div class="form-group">
                                 <label>Quantity</label>
-                                <input type="number" id="pos-item-qty" value="1" min="0.1" step="any" style="font-weight: 600; text-align: center;">
+                                <div class="qty-stepper-wrapper">
+                                    <button type="button" class="qty-stepper-btn" onclick="stepPosQty(-1)">-</button>
+                                    <input type="number" id="pos-item-qty" value="1" min="0.1" step="any" style="font-weight: 600; text-align: center;">
+                                    <button type="button" class="qty-stepper-btn" onclick="stepPosQty(1)">+</button>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>Sale Rate (₹)</label>
@@ -129,7 +184,7 @@
                     </div>
 
                     <!-- Items Grid -->
-                    <div class="table-container">
+                    <div class="table-container pos-cart-table">
                         <table>
                             <thead>
                                 <tr>
@@ -149,6 +204,8 @@
                             </tbody>
                         </table>
                     </div>
+                    <!-- Mobile Viewport Cart Cards (≤ 600px) -->
+                    <div id="pos-cart-mobile-cards" class="pos-cart-mobile-cards"></div>
                 </div>
 
                 <!-- Right: Summary & Action Panel -->
@@ -211,6 +268,16 @@
                     </div>
                 </div>
 
+            </div>
+            <!-- Sticky Mobile Bottom Summary Bar -->
+            <div id="pos-mobile-bottom-bar" class="pos-mobile-bottom-bar">
+                <div class="mob-total-box">
+                    <span class="mob-total-label">NET PAYABLE</span>
+                    <span id="pos-mobile-grand-total" class="mob-total-val">₹0.00</span>
+                </div>
+                <button class="btn btn-success mob-save-btn" onclick="submitSalesBill()">
+                    💾 Save & Print Bill
+                </button>
             </div>
         </div>
 

@@ -463,6 +463,16 @@ CREATE TABLE IF NOT EXISTS backup_log (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Schema Version Tracking Table
+CREATE TABLE IF NOT EXISTS schema_version (
+    version_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    version_number INTEGER NOT NULL UNIQUE,
+    description TEXT NOT NULL,
+    applied_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT OR IGNORE INTO schema_version (version_id, version_number, description) VALUES (1, 1, 'Initial Commercial ERP Baseline Schema');
+
 -- ------------------------------------------------------------
 -- INDEXES FOR MAXIMUM QUERY PERFORMANCE & REPORTING
 -- ------------------------------------------------------------
@@ -474,11 +484,16 @@ CREATE INDEX IF NOT EXISTS idx_stock_ledger_product ON stock_ledger(product_id, 
 CREATE INDEX IF NOT EXISTS idx_stock_ledger_date ON stock_ledger(movement_date);
 CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(sale_date);
 CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id);
+CREATE INDEX IF NOT EXISTS idx_sales_invoice_no ON sales(invoice_no);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_product ON sale_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(purchase_date);
 CREATE INDEX IF NOT EXISTS idx_purchases_supplier ON purchases(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_purchases_invoice_no ON purchases(invoice_no);
 CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items(purchase_id);
 CREATE INDEX IF NOT EXISTS idx_vouchers_date ON vouchers(voucher_date);
 CREATE INDEX IF NOT EXISTS idx_ledger_entries_voucher ON ledger_entries(voucher_id);
 CREATE INDEX IF NOT EXISTS idx_ledger_entries_account ON ledger_entries(account_id);
+CREATE INDEX IF NOT EXISTS idx_customers_mobile ON customers(mobile);
+CREATE INDEX IF NOT EXISTS idx_suppliers_mobile ON suppliers(mobile);
+

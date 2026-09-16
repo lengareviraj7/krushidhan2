@@ -53,3 +53,21 @@ def require_admin_user(authorization: Optional[str] = Header(None)) -> Dict[str,
             detail="Access forbidden: Owner / Admin privileges required for this module.",
         )
     return user
+
+
+def require_roles(allowed_roles: list[str]):
+    """Flexible RBAC dependency factory to check user roles."""
+    def role_checker(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+        user = get_current_user(authorization)
+        role = (user.get("role") or "").upper()
+        normalized_allowed = [r.upper() for r in allowed_roles]
+        if "ADMIN" not in normalized_allowed and "OWNER" not in normalized_allowed:
+            normalized_allowed.extend(["ADMIN", "OWNER", "SUPERADMIN"])
+        if role not in normalized_allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access forbidden: required role in {allowed_roles}.",
+            )
+        return user
+    return role_checker
+
