@@ -168,3 +168,25 @@ def test_create_manufacturer_and_unit(db_manager):
     # Retrieve again (idempotent)
     unit_id_2 = repo.create_unit(Unit(unit_name="Bottle", symbol="BTL"))
     assert unit_id == unit_id_2
+
+
+def test_delete_product(db_manager):
+    """Verify deleting/deactivating product in MasterDataRepository."""
+    from src.repositories.master_data_repository import MasterDataRepository
+    from src.models.master_data import Product, Category
+
+    repo = MasterDataRepository(db_manager)
+    cat_id = repo.create_category(Category(category_name="Test Deletion Cat"))
+
+    prod_id = repo.create_product(Product(
+        product_name="Product To Delete",
+        category_id=cat_id,
+        default_sale_rate=100.0
+    ))
+    assert prod_id > 0
+
+    success = repo.delete_product(prod_id)
+    assert success is True
+
+    prods_after = repo.search_products("Product To Delete")
+    assert len(prods_after) == 0

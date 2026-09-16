@@ -187,6 +187,14 @@ class MasterDataRepository(BaseRepository):
         rows = self.db.fetch_all(sql, (pattern, pattern, pattern))
         return [dict(r) for r in rows]
 
+    def delete_product(self, product_id: int) -> bool:
+        """Deactivate/delete product by setting is_active = 0."""
+        sql = "UPDATE products SET is_active = 0 WHERE product_id = ?;"
+        with self.db.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql, (product_id,))
+            return cursor.rowcount > 0
+
     # ---------------- Customers CRUD ----------------
     def create_customer(self, cust: Customer) -> int:
         sql = """

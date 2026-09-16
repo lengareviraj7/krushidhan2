@@ -896,9 +896,12 @@ function filterInventoryTable() {
                 <td class="text-right">₹${Number(item.purchase_rate || 0).toFixed(2)}</td>
                 <td class="text-right" style="font-weight:600; color:#047857;">₹${Number(item.sale_rate || 0).toFixed(2)}</td>
                 <td class="text-right" style="font-weight:700;">₹${Number(item.purchase_value || 0).toFixed(2)}</td>
-                <td class="text-center">
+                <td class="text-center" style="white-space: nowrap;">
                     <button class="btn btn-primary btn-sm" onclick="openAddStockModal(${item.product_id}, '${passBatch}', ${item.purchase_rate || 0}, ${item.sale_rate || 0}, ${item.mrp || item.sale_rate || 0}, '${passExp}')" style="padding: 4px 10px; font-size: 11px; font-weight: 700; ${!hasStock ? 'background: #15803d; border-color: #15803d;' : ''}">
-                        ${hasStock ? '+ Add Qty' : '+ Add Stock (स्टॉक भरा)'}
+                        ${hasStock ? '+ Add Qty' : '+ Add Stock'}
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteProductCatalogItem(${item.product_id}, '${(item.product_name || "").replace(/'/g, "\\'")}')" style="padding: 3px 8px; font-size: 11px; font-weight: 700; margin-left: 4px;">
+                        🗑️ Delete
                     </button>
                 </td>
             </tr>
@@ -1217,6 +1220,11 @@ function filterProductCatalog() {
                 <td class="text-right" style="font-weight: 700; color: #047857;">₹${saleRate.toFixed(2)}</td>
                 <td class="text-right" style="color: #334155;">₹${mrp.toFixed(2)}</td>
                 <td class="text-center">${stockBadge}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteProductCatalogItem(${p.product_id}, '${(p.product_name || "").replace(/'/g, "\\'")}')" style="padding: 3px 8px; font-size: 11px; font-weight: 700;">
+                        🗑️ Delete
+                    </button>
+                </td>
             </tr>
         `;
     }).join("");
@@ -2839,6 +2847,263 @@ async function saveNewUnit() {
     } catch (err) {
         alert("Error saving unit: " + err.message);
     }
+}
+
+/* ==========================================
+   PRODUCT DELETE & MULTI-PRODUCT SELECTION
+========================================== */
+
+async function deleteProductCatalogItem(productId, productName) {
+    if (!confirm(`❌ Are you sure you want to delete product "${productName}"?\n\nThis will remove it from the Product Catalog and Live Stock listing.`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/masters/products/${productId}`, {
+            method: "DELETE"
+        });
+        if (res.ok) {
+            alert(`✅ Product "${productName}" deleted successfully!`);
+            await refreshProductList();
+            await loadMasterTables();
+            await refreshInventoryList();
+            populateStockProductDropdown();
+        } else {
+            const err = await res.json();
+            alert("Failed to delete product: " + (err.detail || "Server error"));
+        }
+    } catch (err) {
+        alert("Error deleting product: " + err.message);
+    }
+}
+
+let multiSelectedItems = {}; // product_id -> { product, qty }
+
+function openMultiProductModal() {
+    multiSelectedItems = {};
+    const searchInp = document.getElementById("multi-prod-search");
+    if (searchInp) searchInp.value = "";
+    
+    const catSelect = document.getElementById("multi-prod-cat");
+    if (catSelect && allLookups.categories) {
+        catSelect.innerHTML = '<option value="">All Categories</option>' + 
+            allLookups.categories.map(c => `<option value="${c.category_id}">${c.category_name}</option>`).join("");
+    }
+
+    const modal = document.getElementById("modal-multi-product");
+    if (modal) modal.style.display = "flex";
+
+    renderMultiProductList();
+    setTimeout(() => {
+        if (searchInp) searchInp.focus();
+    }, 100);
+}
+
+function closeMultiProductModal() {
+    const modal = document.getElementById("modal-multi-product");
+    if (modal) modal.style.display = "none";
+}
+
+function renderMultiProductList() {
+    const container = document.getElementById("multi-prod-list-container");
+    if (!container) return;
+
+    const search = (document.getElementById("multi-prod-search")?.value || "").trim().toLowerCase();
+    const catFilter = document.getElementById("multi-prod-cat")?.value || "";
+
+    let items = allProducts || [];
+
+    if (search) {
+        items = items.filter(p => 
+            (p.product_name && p.product_name.toLowerCase().includes(search)) ||
+            (p.hsn_code && p.hsn_code.toLowerCase().includes(search)) ||
+            (p.manufacturer_name && p.manufacturer_name.toLowerCase().includes(search)) ||
+            (p.category_name && p.category_name.toLowerCase().includes(search))
+        );
+    }
+    if (catFilter) {
+        items = items.filter(p => String(p.category_id) === String(catFilter));
+    }
+
+    if (items.length === 0) {
+        container.innerHTML = `<div style="grid-column: 1 / -1; padding: 24px; text-align: center; color: #64748b;">No products found matching "${search || 'filters'}".</div>`;
+        updateMultiProductSelectionSummary();
+        return;
+    }
+
+    container.innerHTML = items.map(p => {
+        const isSelected = !!multiSelectedItems[p.product_id];
+        const currentQty = isSelected ? multiSelectedItems[p.product_id].qty : 1;
+        const stockVal = parseFloat(p.total_stock) || 0;
+        const saleRate = parseFloat(p.default_sale_rate) || 0;
+
+        let stockBadge = `<span class="badge badge-success">${stockVal} ${p.unit_symbol || 'Nos'}</span>`;
+        if (stockVal <= 0) {
+            stockBadge = `<span class="badge badge-danger">0 Out of Stock</span>`;
+        }
+
+        return `
+            <div style="border: ${isSelected ? '2px solid #16a34a' : '1px solid #cbd5e1'}; background: ${isSelected ? '#f0fdf4' : '#ffffff'}; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; transition: all 0.15s ease;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                    <div style="display: flex; gap: 8px; align-items: flex-start;">
+                        <input type="checkbox" id="chk-multi-${p.product_id}" ${isSelected ? 'checked' : ''} onchange="toggleMultiProductSelection(${p.product_id})" style="width: 18px; height: 18px; margin-top: 2px; cursor: pointer; accent-color: #16a34a;">
+                        <div>
+                            <div style="font-weight: 700; font-size: 14px; color: #1e293b; line-height: 1.2;">${p.product_name}</div>
+                            <div style="font-size: 11.5px; color: #64748b; margin-top: 2px;">
+                                ${p.category_name || 'General'} • ${p.manufacturer_name || '-'}
+                            </div>
+                        </div>
+                    </div>
+                    ${stockBadge}
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 6px 8px; border-radius: 6px; border: 1px solid #f1f5f9;">
+                    <div>
+                        <span style="font-size: 11px; color: #64748b; display: block;">Rate:</span>
+                        <span style="font-weight: 800; color: #047857; font-size: 14px;">₹${saleRate.toFixed(2)}</span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="stepMultiProdQty(${p.product_id}, -1)" style="padding: 2px 8px; font-weight: 800;">-</button>
+                        <input type="number" id="qty-multi-${p.product_id}" value="${currentQty}" min="0.1" step="any" onchange="updateMultiProdQtyFromInput(${p.product_id}, this.value)" style="width: 50px; text-align: center; font-weight: 700; padding: 3px 2px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="stepMultiProdQty(${p.product_id}, 1)" style="padding: 2px 8px; font-weight: 800;">+</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join("");
+
+    updateMultiProductSelectionSummary();
+}
+
+function toggleMultiProductSelection(prodId) {
+    const p = (allProducts || []).find(x => x.product_id === prodId);
+    if (!p) return;
+
+    if (multiSelectedItems[prodId]) {
+        delete multiSelectedItems[prodId];
+    } else {
+        const qtyInp = document.getElementById(`qty-multi-${prodId}`);
+        const qty = qtyInp ? parseFloat(qtyInp.value) || 1 : 1;
+        multiSelectedItems[prodId] = { product: p, qty: qty };
+    }
+    renderMultiProductList();
+}
+
+function stepMultiProdQty(prodId, delta) {
+    const qtyInp = document.getElementById(`qty-multi-${prodId}`);
+    let cur = qtyInp ? parseFloat(qtyInp.value) || 1 : 1;
+    cur = Math.max(0.1, cur + delta);
+    if (qtyInp) qtyInp.value = cur;
+
+    if (multiSelectedItems[prodId]) {
+        multiSelectedItems[prodId].qty = cur;
+    } else {
+        const p = (allProducts || []).find(x => x.product_id === prodId);
+        if (p) multiSelectedItems[prodId] = { product: p, qty: cur };
+    }
+    renderMultiProductList();
+}
+
+function updateMultiProdQtyFromInput(prodId, val) {
+    const num = Math.max(0.1, parseFloat(val) || 1);
+    if (multiSelectedItems[prodId]) {
+        multiSelectedItems[prodId].qty = num;
+    } else {
+        const p = (allProducts || []).find(x => x.product_id === prodId);
+        if (p) multiSelectedItems[prodId] = { product: p, qty: num };
+    }
+    updateMultiProductSelectionSummary();
+}
+
+function updateMultiProductSelectionSummary() {
+    const countEl = document.getElementById("multi-prod-selected-count");
+    const totalEl = document.getElementById("multi-prod-selected-total");
+
+    const selectedKeys = Object.keys(multiSelectedItems);
+    let totalAmt = 0;
+
+    selectedKeys.forEach(k => {
+        const item = multiSelectedItems[k];
+        const rate = parseFloat(item.product.default_sale_rate) || 0;
+        totalAmt += (item.qty * rate);
+    });
+
+    if (countEl) countEl.textContent = selectedKeys.length;
+    if (totalEl) totalEl.textContent = `₹${totalAmt.toFixed(2)}`;
+}
+
+async function addSelectedMultiProductsToCart() {
+    const selectedKeys = Object.keys(multiSelectedItems);
+    if (selectedKeys.length === 0) {
+        alert("Please select at least 1 product.");
+        return;
+    }
+
+    let addedCount = 0;
+
+    for (const key of selectedKeys) {
+        const { product, qty } = multiSelectedItems[key];
+        const prodId = product.product_id;
+
+        try {
+            const res = await fetch(`/api/inventory/batches/${prodId}`);
+            const batches = await res.json();
+
+            if (!batches || batches.length === 0) {
+                console.warn(`No stock batch found for product: ${product.product_name}`);
+                continue;
+            }
+
+            const topBatch = batches[0];
+            const availQty = parseFloat(topBatch.current_qty) || 0;
+            const useQty = Math.min(qty, availQty > 0 ? availQty : qty);
+            const rate = parseFloat(topBatch.sale_rate) || parseFloat(product.default_sale_rate) || 0;
+            const mrp = parseFloat(topBatch.mrp) || rate;
+
+            const cgst = parseFloat(product.cgst_rate) || 0;
+            const sgst = parseFloat(product.sgst_rate) || 0;
+            const igst = parseFloat(product.igst_rate) || 0;
+
+            const gross = useQty * rate;
+            const netTaxable = gross / (1 + ((cgst + sgst + igst) / 100.0));
+            const cgstAmt = netTaxable * (cgst / 100.0);
+            const sgstAmt = netTaxable * (sgst / 100.0);
+            const igstAmt = netTaxable * (igst / 100.0);
+
+            const cartItem = {
+                product_id: prodId,
+                product_name: product.product_name,
+                batch_id: topBatch.batch_id,
+                batch_no: topBatch.batch_no,
+                exp_date: topBatch.exp_date || '',
+                hsn_code: product.hsn_code || '',
+                unit_name: product.unit_symbol || 'Nos',
+                qty: useQty,
+                sale_rate: rate,
+                mrp: mrp,
+                discount_percent: 0,
+                discount_amount: 0,
+                taxable_amount: Math.round(netTaxable * 100) / 100,
+                cgst_rate: cgst,
+                cgst_amount: Math.round(cgstAmt * 100) / 100,
+                sgst_rate: sgst,
+                sgst_amount: Math.round(sgstAmt * 100) / 100,
+                igst_rate: igst,
+                igst_amount: Math.round(igstAmt * 100) / 100,
+                total_amount: Math.round(gross * 100) / 100
+            };
+
+            currentCart.push(cartItem);
+            addedCount++;
+        } catch (err) {
+            console.error(`Error adding product ${product.product_name} to cart:`, err);
+        }
+    }
+
+    renderPosCart();
+    closeMultiProductModal();
+    alert(`✅ Added ${addedCount} selected product(s) to Counter Bill!`);
 }
 
 

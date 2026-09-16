@@ -60,6 +60,18 @@ def create_product(product: Product):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.delete("/products/{product_id}")
+def delete_product(product_id: int):
+    repo = MasterDataRepository(get_db_manager())
+    try:
+        success = repo.delete_product(product_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Product not found")
+        return {"success": True, "message": "Product deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/customers")
 def list_customers(query: str = ""):
     repo = MasterDataRepository(get_db_manager())
