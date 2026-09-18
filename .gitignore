@@ -17,3 +17,6 @@ htmlcov/
 # SQLite runtime files (keep seed database template if needed)
 data/backups/
 .vercel
+
+# Environment secrets (never commit)
+.env

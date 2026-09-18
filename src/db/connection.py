@@ -11,6 +11,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Generator, List, Optional, Tuple, Union
 
+# Load .env file so MONGODB_URI is available before any connections are created
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+except ImportError:
+    pass
 
 class DatabaseManager:
     """Manages SQLite database connections, schema migrations, and transactions."""
