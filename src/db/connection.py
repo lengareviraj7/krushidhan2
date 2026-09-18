@@ -1,5 +1,6 @@
 """
 SQLite Database Connection Manager with WAL mode, foreign keys, and atomic transactions.
+Includes cloud persistence for Vercel serverless via MongoDB snapshot save/restore.
 """
 from __future__ import annotations
 
@@ -17,6 +18,10 @@ class DatabaseManager:
     def __init__(self, db_path: Optional[Union[str, Path]] = None):
         base_dir = Path(__file__).resolve().parent.parent.parent
         self.bundled_db = base_dir / "data" / "agri_erp.db"
+        self._is_vercel = bool(os.environ.get("VERCEL"))
+        self._has_mongo = bool(
+            os.environ.get("MONGODB_URI") or os.environ.get("MONGO_URL")
+        )
 
         if db_path is not None:
             if isinstance(db_path, str) and db_path == ":memory:":
@@ -25,23 +30,40 @@ class DatabaseManager:
                 self.db_path = Path(db_path)
         elif os.environ.get("DB_PATH"):
             self.db_path = Path(os.environ["DB_PATH"])
-        elif os.environ.get("VERCEL"):
-            # On Vercel serverless functions, root filesystem is read-only.
-            # Use /tmp directory for writable SQLite database.
+        elif self._is_vercel:
+            # On Vercel serverless, root filesystem is read-only → use /tmp
             self.db_path = Path("/tmp/agri_erp.db")
-            if not self.db_path.exists() or self.db_path.stat().st_size == 0:
-                if self.bundled_db.exists() and self.bundled_db.stat().st_size > 0:
-                    try:
-                        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(str(self.bundled_db), str(self.db_path))
-                    except Exception:
-                        pass
+            self._provision_vercel_db()
         else:
             # Default to data/agri_erp.db relative to project root
             self.db_path = self.bundled_db
 
         if self.db_path != ":memory:":
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _provision_vercel_db(self) -> None:
+        """On Vercel cold start, restore from MongoDB snapshot first.
+        Falls back to the bundled seed database if no snapshot exists."""
+        if self.db_path.exists() and self.db_path.stat().st_size > 100:
+            return  # Already provisioned (warm container)
+
+        # Attempt 1: Restore full DB from MongoDB cloud snapshot
+        if self._has_mongo:
+            try:
+                from src.db.cloud_sync import get_cloud_sync_manager
+                mgr = get_cloud_sync_manager()
+                if mgr.restore_db_snapshot(self.db_path):
+                    return  # Success — full database restored from cloud
+            except Exception:
+                pass
+
+        # Attempt 2: Copy bundled seed database
+        if self.bundled_db.exists() and self.bundled_db.stat().st_size > 0:
+            try:
+                self.db_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(self.bundled_db), str(self.db_path))
+            except Exception:
+                pass
 
     def _create_raw_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(
@@ -76,16 +98,6 @@ class DatabaseManager:
                     conn.close()
                     self.initialize_database(include_seed=True)
                     conn = self._create_raw_connection()
-
-                # On Vercel / Cloud serverless, hydrate from Cloud database if connected
-                if os.environ.get("VERCEL") or os.environ.get("MONGODB_URI"):
-                    try:
-                        from src.db.cloud_sync import get_cloud_sync_manager
-                        sync_mgr = get_cloud_sync_manager()
-                        if sync_mgr.is_cloud_enabled:
-                            sync_mgr.hydrate_sqlite_from_cloud(conn)
-                    except Exception:
-                        pass
             except Exception:
                 pass
 
@@ -116,6 +128,20 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def _save_cloud_snapshot(self) -> None:
+        """After a successful write, push the full DB file to MongoDB (async)."""
+        if not (self._is_vercel and self._has_mongo):
+            return
+        if self.db_path == ":memory:":
+            return
+        try:
+            from src.db.cloud_sync import get_cloud_sync_manager
+            mgr = get_cloud_sync_manager()
+            if mgr.is_cloud_enabled:
+                mgr.save_db_snapshot_async(Path(self.db_path))
+        except Exception:
+            pass
+
     @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection, None, None]:
         """Atomic transaction context manager. Commits on success, rolls back on error."""
@@ -123,19 +149,13 @@ class DatabaseManager:
         try:
             yield conn
             conn.commit()
-            if os.environ.get("VERCEL") or os.environ.get("MONGODB_URI"):
-                try:
-                    from src.db.cloud_sync import get_cloud_sync_manager
-                    sync_mgr = get_cloud_sync_manager()
-                    if sync_mgr.is_cloud_enabled:
-                        sync_mgr.sync_all_tables_to_cloud(conn)
-                except Exception:
-                    pass
         except Exception:
             conn.rollback()
             raise
         finally:
             conn.close()
+        # After connection is closed (WAL flushed), persist to cloud
+        self._save_cloud_snapshot()
 
     def execute_query(self, sql: str, params: Union[Tuple, List] = ()) -> int:
         """Execute an INSERT, UPDATE, or DELETE query and return the lastrowid or rowcount."""
